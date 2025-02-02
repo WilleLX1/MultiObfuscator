@@ -1,0 +1,14 @@
+C:\projects\C#\MultiObfuscator\TestApplication\obj\Debug\net8.0\TestApplication.GeneratedMSBuildEditorConfig.editorconfig
+C:\projects\C#\MultiObfuscator\TestApplication\obj\Debug\net8.0\TestApplication.AssemblyInfoInputs.cache
+C:\projects\C#\MultiObfuscator\TestApplication\obj\Debug\net8.0\TestApplication.AssemblyInfo.cs
+C:\projects\C#\MultiObfuscator\TestApplication\obj\Debug\net8.0\TestApplication.csproj.CoreCompileInputs.cache
+C:\projects\C#\MultiObfuscator\TestApplication\bin\Debug\net8.0\TestApplication.exe
+C:\projects\C#\MultiObfuscator\TestApplication\bin\Debug\net8.0\TestApplication.deps.json
+C:\projects\C#\MultiObfuscator\TestApplication\bin\Debug\net8.0\TestApplication.runtimeconfig.json
+C:\projects\C#\MultiObfuscator\TestApplication\bin\Debug\net8.0\TestApplication.dll
+C:\projects\C#\MultiObfuscator\TestApplication\bin\Debug\net8.0\TestApplication.pdb
+C:\projects\C#\MultiObfuscator\TestApplication\obj\Debug\net8.0\TestApplication.dll
+C:\projects\C#\MultiObfuscator\TestApplication\obj\Debug\net8.0\refint\TestApplication.dll
+C:\projects\C#\MultiObfuscator\TestApplication\obj\Debug\net8.0\TestApplication.pdb
+C:\projects\C#\MultiObfuscator\TestApplication\obj\Debug\net8.0\TestApplication.genruntimeconfig.cache
+C:\projects\C#\MultiObfuscator\TestApplication\obj\Debug\net8.0\ref\TestApplication.dll
