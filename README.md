@@ -113,4 +113,4 @@ Contributions welcome! Please follow these guidelines:
 5. Open Pull Request
 
 ## License
-MIT License - see LICENSE for details
+MIT License - see [LICENSE](LICENSE) for details
