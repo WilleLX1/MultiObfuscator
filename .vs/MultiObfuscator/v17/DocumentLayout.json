@@ -11,7 +11,7 @@
       "RelativeMoniker": "D:0:0:{E50A8484-D7DC-4C7A-B376-F495018CA308}|TestApplication\\TestApplication.csproj|solutionrelative:testapplication\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{6CF06838-6742-44F5-A59F-D2AB96BC6DCA}|MultiObfuscator\\MultiObfuscator.csproj|c:\\projects\\c#\\multiobfuscator\\multiobfuscator\\form1.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}|Form",
+      "AbsoluteMoniker": "D:0:0:{6CF06838-6742-44F5-A59F-D2AB96BC6DCA}|MultiObfuscator\\MultiObfuscator.csproj|C:\\projects\\C#\\MultiObfuscator\\multiobfuscator\\form1.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}|Form",
       "RelativeMoniker": "D:0:0:{6CF06838-6742-44F5-A59F-D2AB96BC6DCA}|MultiObfuscator\\MultiObfuscator.csproj|solutionrelative:multiobfuscator\\form1.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}|Form"
     }
   ],
@@ -22,21 +22,8 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 0,
+          "SelectedChildIndex": 1,
           "Children": [
-            {
-              "$type": "Document",
-              "DocumentIndex": 0,
-              "Title": "Form1.cs",
-              "DocumentMoniker": "C:\\projects\\C#\\MultiObfuscator\\MultiObfuscator\\Form1.cs",
-              "RelativeDocumentMoniker": "MultiObfuscator\\Form1.cs",
-              "ToolTip": "C:\\projects\\C#\\MultiObfuscator\\MultiObfuscator\\Form1.cs",
-              "RelativeToolTip": "MultiObfuscator\\Form1.cs",
-              "ViewState": "AgIAAAsAAAAAAAAAAAAQwCYAAAA5AAAAAAAAAA==",
-              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
-              "WhenOpened": "2025-02-02T20:19:16.164Z",
-              "EditorCaption": ""
-            },
             {
               "$type": "Document",
               "DocumentIndex": 1,
@@ -45,9 +32,23 @@
               "RelativeDocumentMoniker": "TestApplication\\Program.cs",
               "ToolTip": "C:\\projects\\C#\\MultiObfuscator\\TestApplication\\Program.cs",
               "RelativeToolTip": "TestApplication\\Program.cs",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAACYAAAABAAAAAAAAAA==",
+              "ViewState": "AgIAAEwAAAAAAAAAAAAowGAAAABAAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
               "WhenOpened": "2025-02-02T20:17:45.709Z",
+              "IsPinned": true,
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "Form1.cs",
+              "DocumentMoniker": "C:\\projects\\C#\\MultiObfuscator\\MultiObfuscator\\Form1.cs",
+              "RelativeDocumentMoniker": "MultiObfuscator\\Form1.cs",
+              "ToolTip": "C:\\projects\\C#\\MultiObfuscator\\MultiObfuscator\\Form1.cs",
+              "RelativeToolTip": "MultiObfuscator\\Form1.cs",
+              "ViewState": "AgIAAHgAAAAAAAAAAAAmwJ0AAAA0AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-02-02T20:19:16.164Z",
               "EditorCaption": ""
             },
             {

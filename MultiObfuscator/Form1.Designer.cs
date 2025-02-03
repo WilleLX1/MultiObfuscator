@@ -34,19 +34,23 @@
             label1 = new Label();
             btnObfuscate = new Button();
             txtLog = new RichTextBox();
+            btnBrowse = new Button();
+            btnSettings = new Button();
             SuspendLayout();
             // 
             // txtPathToObfuscate
             // 
-            txtPathToObfuscate.Location = new Point(12, 12);
+            txtPathToObfuscate.Location = new Point(92, 12);
             txtPathToObfuscate.Name = "txtPathToObfuscate";
-            txtPathToObfuscate.Size = new Size(814, 23);
+            txtPathToObfuscate.Size = new Size(734, 23);
             txtPathToObfuscate.TabIndex = 0;
             txtPathToObfuscate.Text = "C:\\projects\\C#\\MultiObfuscator\\TestApplication\\Program.cs";
             // 
             // txtOrginal
             // 
             txtOrginal.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
+            txtOrginal.BackColor = Color.Black;
+            txtOrginal.ForeColor = Color.White;
             txtOrginal.Location = new Point(12, 41);
             txtOrginal.Name = "txtOrginal";
             txtOrginal.Size = new Size(396, 524);
@@ -55,10 +59,12 @@
             // 
             // txtObfuscated
             // 
-            txtObfuscated.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            txtObfuscated.Location = new Point(536, 41);
+            txtObfuscated.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
+            txtObfuscated.BackColor = Color.Black;
+            txtObfuscated.ForeColor = Color.White;
+            txtObfuscated.Location = new Point(536, 46);
             txtObfuscated.Name = "txtObfuscated";
-            txtObfuscated.Size = new Size(410, 524);
+            txtObfuscated.Size = new Size(678, 524);
             txtObfuscated.TabIndex = 2;
             txtObfuscated.Text = "";
             // 
@@ -67,6 +73,7 @@
             label1.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             label1.AutoSize = true;
             label1.Font = new Font("Segoe UI", 12F, FontStyle.Regular, GraphicsUnit.Point, 0);
+            label1.ForeColor = Color.Transparent;
             label1.Location = new Point(414, 296);
             label1.Name = "label1";
             label1.Size = new Size(116, 21);
@@ -86,17 +93,42 @@
             // txtLog
             // 
             txtLog.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            txtLog.Location = new Point(952, 11);
+            txtLog.BackColor = Color.Black;
+            txtLog.ForeColor = Color.White;
+            txtLog.Location = new Point(1220, 17);
             txtLog.Name = "txtLog";
             txtLog.Size = new Size(406, 553);
             txtLog.TabIndex = 5;
             txtLog.Text = "";
             // 
+            // btnBrowse
+            // 
+            btnBrowse.Location = new Point(12, 12);
+            btnBrowse.Name = "btnBrowse";
+            btnBrowse.Size = new Size(74, 23);
+            btnBrowse.TabIndex = 6;
+            btnBrowse.Text = "BROWSE";
+            btnBrowse.UseVisualStyleBackColor = true;
+            btnBrowse.Click += btnBrowse_Click;
+            // 
+            // btnSettings
+            // 
+            btnSettings.Location = new Point(414, 41);
+            btnSettings.Name = "btnSettings";
+            btnSettings.Size = new Size(116, 30);
+            btnSettings.TabIndex = 7;
+            btnSettings.Text = "Settings";
+            btnSettings.UseVisualStyleBackColor = true;
+            btnSettings.Click += btnSettings_Click;
+            // 
             // Form1
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(1370, 577);
+            BackColor = Color.DimGray;
+            ClientSize = new Size(1638, 577);
+            Controls.Add(btnSettings);
+            Controls.Add(btnBrowse);
             Controls.Add(txtLog);
             Controls.Add(btnObfuscate);
             Controls.Add(label1);
@@ -117,5 +149,7 @@
         private Label label1;
         private Button btnObfuscate;
         private RichTextBox txtLog;
+        private Button btnBrowse;
+        private Button btnSettings;
     }
 }

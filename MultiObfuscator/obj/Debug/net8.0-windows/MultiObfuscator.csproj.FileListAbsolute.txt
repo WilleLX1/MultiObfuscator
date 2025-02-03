@@ -44,3 +44,5 @@ C:\projects\C#\MultiObfuscator\MultiObfuscator\obj\Debug\net8.0-windows\refint\M
 C:\projects\C#\MultiObfuscator\MultiObfuscator\obj\Debug\net8.0-windows\MultiObfuscator.pdb
 C:\projects\C#\MultiObfuscator\MultiObfuscator\obj\Debug\net8.0-windows\MultiObfuscator.genruntimeconfig.cache
 C:\projects\C#\MultiObfuscator\MultiObfuscator\obj\Debug\net8.0-windows\ref\MultiObfuscator.dll
+C:\projects\C#\MultiObfuscator\MultiObfuscator\obj\Debug\net8.0-windows\MultiObfuscator.sourcelink.json
+C:\projects\C#\MultiObfuscator\MultiObfuscator\obj\Debug\net8.0-windows\MultiObfuscator.SettingsForm.resources

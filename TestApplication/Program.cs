@@ -4,36 +4,109 @@ namespace TestApplication
 {
     class Program
     {
-        static void Main(string[] args)
+        public static void Main()
         {
-            Console.WriteLine("Simple Calculator App");
-            Console.Write("Enter your name: ");
-            string userName = Console.ReadLine();
+            // Prompt for input
+            Console.WriteLine("Enter the first number:");
+            string num1 = Console.ReadLine();
+            double number1;
 
-            PrintWelcomeMessage(userName);
+            bool isValidNumber1 = double.TryParse(num1, out number1);
+            if (!isValidNumber1)
+            {
+                Console.WriteLine("Please enter a valid number.");
+                return;
+            }
 
-            Console.Write("Enter first number: ");
-            int num1 = Convert.ToInt32(Console.ReadLine());
+            Console.WriteLine("Enter the second number:");
+            string num2 = Console.ReadLine();
+            double number2;
 
-            Console.Write("Enter second number: ");
-            int num2 = Convert.ToInt32(Console.ReadLine());
+            bool isValidNumber2 = double.TryParse(num2, out number2);
+            if (!isValidNumber2)
+            {
+                Console.WriteLine("Please enter a valid number.");
+                return;
+            }
 
-            int sum = AddNumbers(num1, num2);
-            Console.WriteLine($"\nHello {userName}, the sum is: {sum}");
+            // Determine which operation to perform
+            Console.WriteLine("Choose an operation:");
+            string operation = Console.ReadLine().ToLower();
+            char op;
 
-            Console.WriteLine("\nPress any key to exit...");
-            Console.ReadKey();
+            switch (operation)
+            {
+                case "add":
+                    op = '+';
+                    break;
+                case "subtract":
+                    op = '-';
+                    break;
+                case "multiply":
+                    op = '*';
+                    break;
+                case "divide":
+                    if (number2 == 0)
+                    {
+                        Console.WriteLine("Cannot divide by zero!");
+                        return;
+                    }
+                    op = '/';
+                    break;
+                default:
+                    Console.WriteLine("Invalid operation. Please choose from add, subtract, multiply, or divide.");
+                    return;
+            }
+
+            // Perform the calculation
+            double result;
+            switch (op)
+            {
+                case '+':
+                    result = Add(number1, number2);
+                    break;
+                case '-':
+                    result = Subtract(number1, number2);
+                    break;
+                case '*':
+                    result = Multiply(number1, number2);
+                    break;
+                case '/':
+                    result = Divide(number1, number2);
+                    break;
+                default:
+                    throw new Exception("This should not happen.");
+            }
+
+            // Display the result
+            if (result == (int)result)
+            {
+                Console.WriteLine($"Result: {(int)result}");
+            }
+            else
+            {
+                Console.WriteLine($"Result: {result}");
+            }
         }
 
-        static void PrintWelcomeMessage(string name)
+        private static double Add(double num1, double num2)
         {
-            string greeting = $"Welcome, {name}!";
-            Console.WriteLine($"\n{greeting}");
+            return num1 + num2;
         }
 
-        static int AddNumbers(int a, int b)
+        private static double Subtract(double num1, double num2)
         {
-            return a + b;
+            return num1 - num2;
+        }
+
+        private static double Multiply(double num1, double num2)
+        {
+            return num1 * num2;
+        }
+
+        private static double Divide(double num1, double num2)
+        {
+            return num1 / num2;
         }
     }
 }

@@ -12,3 +12,4 @@ C:\projects\C#\MultiObfuscator\TestApplication\obj\Debug\net8.0\refint\TestAppli
 C:\projects\C#\MultiObfuscator\TestApplication\obj\Debug\net8.0\TestApplication.pdb
 C:\projects\C#\MultiObfuscator\TestApplication\obj\Debug\net8.0\TestApplication.genruntimeconfig.cache
 C:\projects\C#\MultiObfuscator\TestApplication\obj\Debug\net8.0\ref\TestApplication.dll
+C:\projects\C#\MultiObfuscator\TestApplication\obj\Debug\net8.0\TestApplication.sourcelink.json

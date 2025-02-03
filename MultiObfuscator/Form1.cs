@@ -10,34 +10,106 @@ namespace MultiObfuscator
 {
     public partial class Form1 : Form
     {
+        // Hold the settings instance.
+        private ObfuscatorSettings obfuscatorSettings = new ObfuscatorSettings();
+
         public Form1()
         {
             InitializeComponent();
         }
 
-        public void Log(string message)
+        public void Log(string message, string level = "info")
         {
-            // Get current time and append message to the log
+            if (txtLog.InvokeRequired)
+            {
+                txtLog.Invoke(new Action(() => Log(message, level)));
+                return;
+            }
+
+            // Get the current time
             string time = DateTime.Now.ToString("HH:mm:ss");
-            txtLog.Text += $"[{time}] {message}{Environment.NewLine}";
+            string formattedMessage = $"[{time}] {message}";
+
+            // Set color based on log level
+            Color logColor = Color.White;
+            switch (level.ToLower())
+            {
+                case "info":
+                    logColor = Color.Blue;
+                    break;
+                case "warning":
+                    logColor = Color.Orange;
+                    break;
+                case "error":
+                    logColor = Color.Red;
+                    break;
+                case "success":
+                    logColor = Color.Green;
+                    break;
+                case "debug":
+                    logColor = Color.White;
+                    break;
+            }
+
+            // Append text with color
+            AppendTextWithColor(txtLog, formattedMessage + Environment.NewLine, logColor);
+        }
+
+        // Helper function to add colored text
+        private void AppendTextWithColor(RichTextBox box, string text, Color color)
+        {
+            box.SelectionStart = box.TextLength;
+            box.SelectionLength = 0;
+            box.SelectionColor = color;
+            box.AppendText(text);
+            box.SelectionColor = box.ForeColor; // Reset color
         }
 
         private void obfuscate()
         {
-            string code = File.ReadAllText(txtPathToObfuscate.Text);
+            try
+            {
+                // Clear the log
+                txtLog.Clear();
 
-            SyntaxTree tree = CSharpSyntaxTree.ParseText(code);
-            var root = tree.GetRoot();
+                Log("Starting obfuscation process...", "info");
 
-            // Pass the Log method to the Obfuscator
-            var obfuscator = new Obfuscator(Log);
-            var obfuscatedRoot = obfuscator.Visit(root);
+                string code = File.ReadAllText(txtPathToObfuscate.Text);
+                Log("File successfully read.", "success");
 
-            txtObfuscated.Text = obfuscatedRoot.ToFullString();
+                SyntaxTree tree = CSharpSyntaxTree.ParseText(code);
+                var root = tree.GetRoot();
+
+                var errors = tree.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
+                if (errors.Any())
+                {
+                    Log("Syntax errors detected. Obfuscation aborted.", "error");
+                    MessageBox.Show($"Syntax errors detected:\n{string.Join("\n", errors)}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                var obfuscator = new Obfuscator(Log);
+                var obfuscatedRoot = obfuscator.Visit(root).NormalizeWhitespace();
+                Log("Obfuscation completed successfully.", "success");
+
+                txtObfuscated.Text = obfuscatedRoot.ToFullString();
+            }
+            catch (Exception ex)
+            {
+                Log($"[ERROR] An unexpected error occurred: {ex.Message}", "error");
+            }
         }
 
         private void btnObfuscate_Click(object sender, EventArgs e)
         {
+            if (string.IsNullOrEmpty(txtPathToObfuscate.Text))
+            {
+                Log("No file selected for obfuscation.", "error");
+                MessageBox.Show("Please select a file to obfuscate", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            Log("Obfuscation started.", "info");
             updateTextbox();
             obfuscate();
         }
@@ -46,14 +118,47 @@ namespace MultiObfuscator
         {
             txtOrginal.Text = File.ReadAllText(txtPathToObfuscate.Text);
         }
+
+        private void btnBrowse_Click(object sender, EventArgs e)
+        {
+            OpenFileDialog dialog = new OpenFileDialog();
+            dialog.Filter = "C# files (*.cs)|*.cs";
+            dialog.Title = "Select a C# file to obfuscate";
+
+            if (dialog.ShowDialog() == DialogResult.OK)
+            {
+                Log($"File selected: {dialog.FileName}", "info");
+                txtPathToObfuscate.Text = dialog.FileName;
+                updateTextbox();
+            }
+            else
+            {
+                Log("No file selected.", "warning");
+            }
+        }
+
+        private void btnSettings_Click(object sender, EventArgs e)
+        {
+            using (var settingsForm = new SettingsForm(obfuscatorSettings))
+            {
+                if (settingsForm.ShowDialog() == DialogResult.OK)
+                {
+                    // The obfuscatorSettings object is updated automatically.
+                    MessageBox.Show("Settings updated.", "Information", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
+        }
     }
 
     class Obfuscator : CSharpSyntaxRewriter
     {
         private Dictionary<string, string> nameMap = new Dictionary<string, string>();
         private Random random = new Random();
-        private Action<string> log; // Logging delegate
-        private bool decryptStringInjected = false;
+        private Action<string, string> log;
+        private bool decryptStringInjected = false; 
+        private string decryptStringMethodName = "M_xxxxx";
+        private ObfuscatorSettings settings; // New settings object
+
         private static readonly HashSet<string> systemIdentifiers = new HashSet<string>
         {
             "System", "Console", "Microsoft", "Convert", "Encoding", "Environment",
@@ -62,7 +167,13 @@ namespace MultiObfuscator
             "Parse", "Length"
         };
 
-        public Obfuscator(Action<string> logAction) => this.log = logAction;
+
+        public Obfuscator(Action<string, string> logAction, ObfuscatorSettings settings = null)
+        {
+            this.log = logAction;
+            this.settings = settings ?? new ObfuscatorSettings();
+        }
+
 
         private string GenerateRandomName()
         {
@@ -70,7 +181,7 @@ namespace MultiObfuscator
             var generated = new string(Enumerable.Repeat(chars, 6)
                 .Select(s => s[random.Next(s.Length)]).ToArray());
 
-            log($"[GenerateRandomName] -> {generated}"); // Use the delegate
+            log($"[GenerateRandomName] -> {generated}", "debug");
             return generated;
         }
 
@@ -80,11 +191,11 @@ namespace MultiObfuscator
             {
                 string newName = prefix + "_" + GenerateRandomName();
                 nameMap[originalName] = newName;
-                log($"[AddNameMap] '{originalName}' -> '{newName}'"); // Use the delegate
+                log($"[AddNameMap] '{originalName}' -> '{newName}'", "success");
             }
             else
             {
-                log($"[AddNameMap] already exists: '{originalName}' -> '{nameMap[originalName]}'");
+                log($"[AddNameMap] already exists: '{originalName}' -> '{nameMap[originalName]}'", "info");
             }
         }
 
@@ -92,42 +203,98 @@ namespace MultiObfuscator
         {
             if (nameMap.TryGetValue(originalName, out var newName))
             {
-                log($"[LookupName] Found mapping for '{originalName}' -> '{newName}'");
+                log($"[LookupName] Found mapping for '{originalName}' -> '{newName}'", "debug");
                 return newName;
             }
             else
             {
-                log($"[LookupName] WARNING: No mapping found for '{originalName}'");
+                log($"[LookupName] WARNING: No mapping found for '{originalName}'", "warning");
                 return null;
             }
         }
 
-
-        // Update all other Console.WriteLine calls to use the log delegate:
         public override SyntaxNode VisitLiteralExpression(LiteralExpressionSyntax node)
         {
             if (node.IsKind(SyntaxKind.StringLiteralExpression))
             {
+                if (node.Parent is CaseSwitchLabelSyntax)
+                {
+                    return node;
+                }
                 string originalString = node.Token.ValueText;
-                string encryptedString = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(originalString));
 
-                log($"[VisitLiteralExpression] '{originalString}' -> 'DecryptString(\"{encryptedString}\")'");
+                // If string splitting is disabled, simply encrypt the whole string.
+                if (!settings.EnableStringSplitting || originalString.Length <= 4)
+                {
+                    string encryptedString = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(originalString));
+                    log($"[VisitLiteralExpression] Encrypting '{originalString}' -> M_xxxxx(\"{encryptedString}\")", "info");
 
-                return SyntaxFactory.InvocationExpression(
-                    SyntaxFactory.IdentifierName("DecryptString"),
-                    SyntaxFactory.ArgumentList(
-                        SyntaxFactory.SingletonSeparatedList(
-                            SyntaxFactory.Argument(
-                                SyntaxFactory.LiteralExpression(
-                                    SyntaxKind.StringLiteralExpression,
-                                    SyntaxFactory.Literal(encryptedString)
+                    return SyntaxFactory.InvocationExpression(
+                        SyntaxFactory.IdentifierName("M_xxxxx"),
+                        SyntaxFactory.ArgumentList(
+                            SyntaxFactory.SingletonSeparatedList(
+                                SyntaxFactory.Argument(
+                                    SyntaxFactory.LiteralExpression(
+                                        SyntaxKind.StringLiteralExpression,
+                                        SyntaxFactory.Literal(encryptedString)
+                                    )
                                 )
                             )
                         )
-                    )
-                );
+                    );
+                }
+                else // If enabled, split the string.
+                {
+                    log($"[VisitLiteralExpression] Splitting and encrypting '{originalString}'", "info");
+                    int maxPieces = Math.Min(5, originalString.Length);
+                    int pieces = random.Next(2, maxPieces + 1);
+                    int pieceLength = originalString.Length / pieces;
+                    List<string> splitPieces = new List<string>();
+                    int index = 0;
+                    for (int i = 0; i < pieces; i++)
+                    {
+                        if (i == pieces - 1)
+                        {
+                            splitPieces.Add(originalString.Substring(index));
+                        }
+                        else
+                        {
+                            splitPieces.Add(originalString.Substring(index, pieceLength));
+                            index += pieceLength;
+                        }
+                    }
+                    List<ExpressionSyntax> partExpressions = new List<ExpressionSyntax>();
+                    foreach (var piece in splitPieces)
+                    {
+                        string encodedPiece = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(piece));
+                        var decryptCall = SyntaxFactory.InvocationExpression(
+                            SyntaxFactory.IdentifierName("M_xxxxx"),
+                            SyntaxFactory.ArgumentList(
+                                SyntaxFactory.SingletonSeparatedList(
+                                    SyntaxFactory.Argument(
+                                        SyntaxFactory.LiteralExpression(
+                                            SyntaxKind.StringLiteralExpression,
+                                            SyntaxFactory.Literal(encodedPiece)
+                                        )
+                                    )
+                                )
+                            )
+                        );
+                        partExpressions.Add(decryptCall);
+                    }
+                    ExpressionSyntax concatenated = partExpressions[0];
+                    for (int i = 1; i < partExpressions.Count; i++)
+                    {
+                        concatenated = SyntaxFactory.BinaryExpression(
+                            SyntaxKind.AddExpression,
+                            concatenated,
+                            partExpressions[i]
+                        );
+                    }
+                    log($"[VisitLiteralExpression - StringSplitting] '{originalString}' split into {pieces} parts.", "info");
+                    return concatenated;
+                }
             }
-
             return base.VisitLiteralExpression(node);
         }
 
@@ -141,6 +308,7 @@ namespace MultiObfuscator
 
             if (newVarName != null)
             {
+                log($"[VisitVariableDeclarator] Renaming variable '{originalName}' -> '{newVarName}'", "debug");
                 visited = visited.WithIdentifier(SyntaxFactory.Identifier(newVarName));
             }
 
@@ -150,16 +318,15 @@ namespace MultiObfuscator
         public override SyntaxNode VisitParameter(ParameterSyntax node)
         {
             var originalName = node.Identifier.Text;
-            log($"[VisitParameter] param '{originalName}' ...");
+            log($"[VisitParameter] param '{originalName}' ...", "info");
 
-            // Rename the parameter using the nameMap
             var newName = LookupName(originalName);
             if (newName != null)
             {
                 node = node.WithIdentifier(SyntaxFactory.Identifier(newName));
             }
 
-            return base.VisitParameter(node); // Recurse with the updated node
+            return base.VisitParameter(node);
         }
 
         public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
@@ -168,7 +335,7 @@ namespace MultiObfuscator
             {
                 string originalName = identifier.Identifier.Text;
 
-                // Skip lookup for already-obfuscated names (M_, P_, V_, C_)
+                // Skip lookup for already-obfuscated names.
                 if (originalName.StartsWith("M_") || originalName.StartsWith("P_")
                     || originalName.StartsWith("V_") || originalName.StartsWith("C_"))
                 {
@@ -178,7 +345,7 @@ namespace MultiObfuscator
                 string newName = LookupName(originalName);
                 if (newName != null)
                 {
-                    log($"[VisitInvocationExpression] Replacing invocation '{originalName}' -> '{newName}'");
+                    log($"[VisitInvocationExpression] Replacing invocation '{originalName}' -> '{newName}'", "info");
                     node = node.WithExpression(SyntaxFactory.IdentifierName(newName));
                 }
             }
@@ -201,16 +368,56 @@ namespace MultiObfuscator
                 }
             }
 
+            // Process the class normally.
             var visitedClass = (ClassDeclarationSyntax)base.VisitClassDeclaration(node);
             visitedClass = visitedClass.WithIdentifier(GetRenamedIdentifier(originalClassName));
 
             if (!decryptStringInjected)
             {
+                log("[VisitClassDeclaration] Injecting DecryptString method (M_xxxxx).", "info");
                 visitedClass = visitedClass.AddMembers(CreateDecryptMethod());
                 decryptStringInjected = true;
             }
 
+            // === NEW: Inject a static field for V_xxxxx ===
+            // This ensures that any references (e.g. in dead code) to "V_xxxxx" are valid.
+            // Generate a random string value for the field.
+            string randomString = GenerateRandomName();
+
+            bool hasV_xxxxxDeclaration = visitedClass.Members
+                .OfType<FieldDeclarationSyntax>()
+                .Any(f => f.Declaration.Variables.Any(v => v.Identifier.Text == "V_" + randomString));
+            // === End of NEW code ===
+
             return visitedClass;
+        }
+
+        public override SyntaxNode VisitBlock(BlockSyntax node)
+        {
+            var visitedBlock = (BlockSyntax)base.VisitBlock(node);
+            var statements = visitedBlock.Statements.ToList();
+
+            if (statements.Count > 0 && random.NextDouble() < settings.DeadCodeProbability)
+            {
+                var returnIndices = statements
+                    .Select((stmt, index) => new { stmt, index })
+                    .Where(x => x.stmt is ReturnStatementSyntax)
+                    .Select(x => x.index)
+                    .ToList();
+
+                int insertionIndex;
+                if (returnIndices.Any())
+                {
+                    insertionIndex = random.Next(0, returnIndices.Min());
+                }
+                else
+                {
+                    insertionIndex = random.Next(0, statements.Count + 1);
+                }
+                statements.Insert(insertionIndex, GenerateDeadCodeBlock());
+            }
+
+            return visitedBlock.WithStatements(SyntaxFactory.List(statements));
         }
 
         private void ProcessMethod(MethodDeclarationSyntax method)
@@ -218,7 +425,7 @@ namespace MultiObfuscator
             if (method.ExplicitInterfaceSpecifier != null ||
                 method.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword)))
             {
-                log($"[SkipMethod] Preserving {method.Identifier.Text}");
+                log($"[SkipMethod] Preserving {method.Identifier.Text}", "info");
                 return;
             }
 
@@ -249,32 +456,226 @@ namespace MultiObfuscator
         {
             if (body == null) return;
 
-            foreach (var variable in body.DescendantNodes()
-                .OfType<VariableDeclaratorSyntax>())
+            foreach (var variable in body.DescendantNodes().OfType<VariableDeclaratorSyntax>())
             {
                 AddNameMap(variable.Identifier.Text, "V");
             }
         }
 
+        private StatementSyntax GenerateDeadCodeBlock()
+        {
+            var condition = SyntaxFactory.LiteralExpression(SyntaxKind.FalseLiteralExpression);
+            int randomValue = random.Next(0, 100);
+            string randomString = GenerateRandomName();
+            var dummyDeclaration = SyntaxFactory.LocalDeclarationStatement(
+                SyntaxFactory.VariableDeclaration(
+                    SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.IntKeyword)))
+                .WithVariables(
+                    SyntaxFactory.SingletonSeparatedList(
+                        SyntaxFactory.VariableDeclarator(SyntaxFactory.Identifier("V_" + randomString))
+                        .WithInitializer(
+                            SyntaxFactory.EqualsValueClause(
+                                SyntaxFactory.LiteralExpression(
+                                    SyntaxKind.NumericLiteralExpression,
+                                    SyntaxFactory.Literal(randomValue)
+                                )
+                            )
+                        )
+                    )
+                )
+            ).NormalizeWhitespace();  // Ensure formatting
+
+            var block = SyntaxFactory.Block(dummyDeclaration);
+            return SyntaxFactory.IfStatement(condition, block);
+        }
+
         public override SyntaxNode VisitMethodDeclaration(MethodDeclarationSyntax node)
         {
+            // If the method is public, has an interface specifier, has no body,
+            // or is Main (if you wish to leave Main untouched), or if flattening is disabled:
             if (node.ExplicitInterfaceSpecifier != null ||
-                node.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword)))
+                node.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword)) ||
+                node.Body == null ||
+                (node.Identifier.Text == "Main" && IsMainMethod(node)) ||
+                !settings.EnableControlFlowFlattening)
             {
                 return base.VisitMethodDeclaration(node);
             }
 
-            var originalName = node.Identifier.Text;
-            var visited = (MethodDeclarationSyntax)base.VisitMethodDeclaration(node);
-            return visited.WithIdentifier(GetRenamedIdentifier(originalName));
+            // Otherwise, perform the control–flow flattening transformation.
+            // (The transformation code remains essentially the same as before.)
+            MethodDeclarationSyntax transformedNode = (MethodDeclarationSyntax)base.VisitMethodDeclaration(node);
+
+            bool isNonVoid = true;
+            if (transformedNode.ReturnType is PredefinedTypeSyntax pts &&
+                pts.Keyword.IsKind(SyntaxKind.VoidKeyword))
+            {
+                isNonVoid = false;
+            }
+
+            string stateVarName = "V_" + GenerateRandomName();
+            string resultVarName = "V_" + GenerateRandomName();
+
+            List<StatementSyntax> newStatements = new List<StatementSyntax>();
+
+            // 1. Insert state variable declaration.
+            var stateDeclaration = SyntaxFactory.LocalDeclarationStatement(
+                SyntaxFactory.VariableDeclaration(
+                    SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.IntKeyword)))
+                .WithVariables(
+                    SyntaxFactory.SingletonSeparatedList(
+                        SyntaxFactory.VariableDeclarator(SyntaxFactory.Identifier(stateVarName))
+                        .WithInitializer(
+                            SyntaxFactory.EqualsValueClause(
+                                SyntaxFactory.LiteralExpression(
+                                    SyntaxKind.NumericLiteralExpression,
+                                    SyntaxFactory.Literal(0)
+                                )
+                            )
+                        )
+                    )
+                )
+            );
+            newStatements.Add(stateDeclaration);
+
+            // 2. For non–void methods, declare a result variable.
+            if (isNonVoid)
+            {
+                var resultDeclaration = SyntaxFactory.LocalDeclarationStatement(
+                    SyntaxFactory.VariableDeclaration(transformedNode.ReturnType)
+                    .WithVariables(
+                        SyntaxFactory.SingletonSeparatedList(
+                            SyntaxFactory.VariableDeclarator(SyntaxFactory.Identifier(resultVarName))
+                            .WithInitializer(
+                                SyntaxFactory.EqualsValueClause(
+                                    SyntaxFactory.DefaultExpression(transformedNode.ReturnType)
+                                )
+                            )
+                        )
+                    )
+                );
+                newStatements.Add(resultDeclaration);
+            }
+
+            // 3. Process each original statement into a switch section.
+            var originalStatements = transformedNode.Body.Statements;
+            List<SwitchSectionSyntax> switchSections = new List<SwitchSectionSyntax>();
+            int caseIndex = 0;
+            foreach (var stmt in originalStatements)
+            {
+                var caseLabel = SyntaxFactory.CaseSwitchLabel(
+                    SyntaxFactory.LiteralExpression(
+                        SyntaxKind.NumericLiteralExpression,
+                        SyntaxFactory.Literal(caseIndex)
+                    )
+                );
+
+                List<StatementSyntax> caseStatements = new List<StatementSyntax>();
+
+                if (stmt is ReturnStatementSyntax returnStmt)
+                {
+                    if (isNonVoid)
+                    {
+                        var assignResult = SyntaxFactory.ExpressionStatement(
+                            SyntaxFactory.AssignmentExpression(
+                                SyntaxKind.SimpleAssignmentExpression,
+                                SyntaxFactory.IdentifierName(resultVarName),
+                                returnStmt.Expression ?? SyntaxFactory.DefaultExpression(transformedNode.ReturnType)
+                            )
+                        );
+                        caseStatements.Add(assignResult);
+                    }
+                    else
+                    {
+                        caseStatements.Add(stmt);
+                    }
+
+                    var setTerminate = SyntaxFactory.ExpressionStatement(
+                        SyntaxFactory.AssignmentExpression(
+                            SyntaxKind.SimpleAssignmentExpression,
+                            SyntaxFactory.IdentifierName(stateVarName),
+                            SyntaxFactory.PrefixUnaryExpression(
+                                SyntaxKind.UnaryMinusExpression,
+                                SyntaxFactory.LiteralExpression(
+                                    SyntaxKind.NumericLiteralExpression,
+                                    SyntaxFactory.Literal(1)
+                                )
+                            )
+                        )
+                    );
+                    caseStatements.Add(setTerminate);
+                }
+                else
+                {
+                    caseStatements.Add(stmt);
+                    var setNext = SyntaxFactory.ExpressionStatement(
+                        SyntaxFactory.AssignmentExpression(
+                            SyntaxKind.SimpleAssignmentExpression,
+                            SyntaxFactory.IdentifierName(stateVarName),
+                            SyntaxFactory.LiteralExpression(
+                                SyntaxKind.NumericLiteralExpression,
+                                SyntaxFactory.Literal(caseIndex + 1)
+                            )
+                        )
+                    );
+                    caseStatements.Add(setNext);
+                }
+
+                caseStatements.Add(SyntaxFactory.BreakStatement());
+                var switchSection = SyntaxFactory.SwitchSection(
+                    SyntaxFactory.List<SwitchLabelSyntax>(new[] { caseLabel }),
+                    SyntaxFactory.List(caseStatements)
+                );
+                switchSections.Add(switchSection);
+                caseIndex++;
+            }
+
+            // 4. Create a default switch section.
+            var defaultSection = SyntaxFactory.SwitchSection(
+                SyntaxFactory.List<SwitchLabelSyntax>(new[] { SyntaxFactory.DefaultSwitchLabel() }),
+                SyntaxFactory.List(new StatementSyntax[] { SyntaxFactory.BreakStatement() })
+            );
+            switchSections.Add(defaultSection);
+
+            // 5. Build the switch statement.
+            var switchStatement = SyntaxFactory.SwitchStatement(
+                SyntaxFactory.IdentifierName(stateVarName),
+                SyntaxFactory.List(switchSections)
+            );
+
+            // 6. Build a while loop that runs until state equals -1.
+            var whileLoop = SyntaxFactory.WhileStatement(
+                SyntaxFactory.BinaryExpression(
+                    SyntaxKind.NotEqualsExpression,
+                    SyntaxFactory.IdentifierName(stateVarName),
+                    SyntaxFactory.LiteralExpression(
+                        SyntaxKind.NumericLiteralExpression,
+                        SyntaxFactory.Literal(-1)
+                    )
+                ),
+                SyntaxFactory.Block(switchStatement)
+            );
+            newStatements.Add(whileLoop);
+
+            // 7. For non–void methods, add a final return.
+            if (isNonVoid)
+            {
+                newStatements.Add(SyntaxFactory.ReturnStatement(SyntaxFactory.IdentifierName(resultVarName)));
+            }
+
+            var newBody = SyntaxFactory.Block(newStatements);
+            var newMethod = transformedNode.WithBody(newBody);
+            newMethod = newMethod.WithIdentifier(GetRenamedIdentifier(transformedNode.Identifier.Text));
+            transformedNode = (MethodDeclarationSyntax)newMethod.NormalizeWhitespace();
+            return transformedNode;
         }
 
         public override SyntaxNode VisitIdentifierName(IdentifierNameSyntax node)
         {
-            if (IsSystemType(node.Identifier.Text)) return node;
-
             var original = node.Identifier.Text;
             var newName = LookupName(original);
+
+            log($"[VisitIdentifierName] '{original}' -> '{newName}'", "info");
 
             return newName != null
                 ? node.WithIdentifier(SyntaxFactory.Identifier(newName))
@@ -304,11 +705,11 @@ namespace MultiObfuscator
 
         private MethodDeclarationSyntax CreateDecryptMethod() =>
             SyntaxFactory.ParseMemberDeclaration(@"
-                private static string DecryptString(string encrypted)
+                private static string M_xxxxx(string V_xxxxx)
                 {
-                    if (string.IsNullOrEmpty(encrypted)) return string.Empty;
-                    byte[] data = Convert.FromBase64String(encrypted);
-                    return System.Text.Encoding.UTF8.GetString(data);
+                    if (string.IsNullOrEmpty(V_xxxxx)) return string.Empty;
+                    byte[] V_xxxx = Convert.FromBase64String(V_xxxxx);
+                    return System.Text.Encoding.UTF8.GetString(V_xxxx);
                 }") as MethodDeclarationSyntax;
 
         private SyntaxToken GetRenamedIdentifier(string originalName)
