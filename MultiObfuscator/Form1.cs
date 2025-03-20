@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Collections.Generic;
 using Microsoft.CodeAnalysis;
@@ -152,11 +152,17 @@ namespace MultiObfuscator
 
     class Obfuscator : CSharpSyntaxRewriter
     {
+        // Global mapping för klasser, metoder etc.
         private Dictionary<string, string> nameMap = new Dictionary<string, string>();
+        // En stack för lokala (scope‑specifika) namn
+        private Stack<Dictionary<string, string>> localScopeStack = new Stack<Dictionary<string, string>>();
         private Random random = new Random();
         private Action<string, string> log;
-        private bool decryptStringInjected = false; 
-        private string decryptStringMethodName = "M_xxxxx";
+        private bool decryptStringInjected = false;
+        private string decryptStringMethodName = "M_mgbkf";
+        private string decryptStringVariableName = "V_homft";
+        private string decryptStringVariable2Name = "V_xkgpd";
+
         private ObfuscatorSettings settings; // New settings object
 
         private static readonly HashSet<string> systemIdentifiers = new HashSet<string>
@@ -167,51 +173,200 @@ namespace MultiObfuscator
             "Parse", "Length"
         };
 
-
         public Obfuscator(Action<string, string> logAction, ObfuscatorSettings settings = null)
         {
             this.log = logAction;
             this.settings = settings ?? new ObfuscatorSettings();
         }
 
+        #region Hjälpfunktioner för namn
+
+        private bool IsMainMethod(MethodDeclarationSyntax method)
+        {
+            return method.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)) &&
+                   method.ReturnType is PredefinedTypeSyntax returnType &&
+                   returnType.Keyword.IsKind(SyntaxKind.VoidKeyword);
+        }
+        private void ProcessMethod(MethodDeclarationSyntax method)
+        {
+            if (method.ExplicitInterfaceSpecifier != null ||
+                method.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword)))
+            {
+                log($"[SkipMethod] Preserving {method.Identifier.Text}", "info");
+                return;
+            }
+
+            var methodName = method.Identifier.Text;
+            if (methodName == "Main" && IsMainMethod(method)) return;
+
+            AddNameMap(methodName, "M");
+            ProcessParameters(method.ParameterList);
+            ProcessVariables(method.Body);
+        }
 
         private string GenerateRandomName()
         {
             const string chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
             var generated = new string(Enumerable.Repeat(chars, 6)
                 .Select(s => s[random.Next(s.Length)]).ToArray());
-
             log($"[GenerateRandomName] -> {generated}", "debug");
             return generated;
         }
 
-        private void AddNameMap(string originalName, string prefix)
+        // Global mapping (för klasser, metoder, fält etc.)
+        private void AddGlobalMapping(string originalName, string prefix)
         {
             if (!nameMap.ContainsKey(originalName))
             {
                 string newName = prefix + "_" + GenerateRandomName();
                 nameMap[originalName] = newName;
-                log($"[AddNameMap] '{originalName}' -> '{newName}'", "success");
+                log($"[AddGlobalMapping] '{originalName}' -> '{newName}'", "success");
             }
             else
             {
-                log($"[AddNameMap] already exists: '{originalName}' -> '{nameMap[originalName]}'", "info");
+                log($"[AddGlobalMapping] already exists: '{originalName}' -> '{nameMap[originalName]}'", "info");
             }
         }
 
-        private string LookupName(string originalName)
+        private string LookupGlobalMapping(string originalName)
         {
             if (nameMap.TryGetValue(originalName, out var newName))
             {
-                log($"[LookupName] Found mapping for '{originalName}' -> '{newName}'", "debug");
+                log($"[LookupGlobalMapping] Found mapping for '{originalName}' -> '{newName}'", "debug");
                 return newName;
             }
             else
             {
-                log($"[LookupName] WARNING: No mapping found for '{originalName}'", "warning");
+                log($"[LookupGlobalMapping] WARNING: No mapping found for '{originalName}'", "warning");
                 return null;
             }
         }
+
+        // Lokal (scope‑specifik) mapping
+        private void PushLocalScope()
+        {
+            localScopeStack.Push(new Dictionary<string, string>());
+        }
+        private void PopLocalScope()
+        {
+            localScopeStack.Pop();
+        }
+
+        private void AddLocalMapping(string originalName, string newName)
+        {
+            if (localScopeStack.Count > 0)
+            {
+                localScopeStack.Peek()[originalName] = newName;
+                log($"[AddLocalMapping] '{originalName}' -> '{newName}'", "debug");
+            }
+        }
+
+        private string LookupLocalMapping(string originalName)
+        {
+            foreach (var scope in localScopeStack)
+            {
+                if (scope.TryGetValue(originalName, out var newName))
+                {
+                    log($"[LookupLocalMapping] Found mapping for '{originalName}' -> '{newName}'", "debug");
+                    return newName;
+                }
+            }
+            return null;
+        }
+
+        #endregion
+
+        #region Överskrivningar för lokala scopes
+        // Varje block får sin egen lokala scope
+        public override SyntaxNode VisitBlock(BlockSyntax node)
+        {
+            PushLocalScope();
+            var visitedBlock = (BlockSyntax)base.VisitBlock(node);
+            PopLocalScope();
+            return visitedBlock;
+        }
+
+        // Parametrar är lokala – lägg mapping i den aktuella scopen
+        public override SyntaxNode VisitParameter(ParameterSyntax node)
+        {
+            string originalName = node.Identifier.Text;
+            string newName = LookupLocalMapping(originalName);
+            if (newName == null)
+            {
+                newName = "P_" + GenerateRandomName();
+                AddLocalMapping(originalName, newName);
+            }
+            node = node.WithIdentifier(SyntaxFactory.Identifier(newName));
+            return base.VisitParameter(node);
+        }
+
+        // Variabeldeklarationer – skilj mellan fält (globalt) och lokala variabler
+        public override SyntaxNode VisitVariableDeclarator(VariableDeclaratorSyntax node)
+        {
+            string originalName = node.Identifier.Text;
+            bool isField = node.Parent?.Parent is ClassDeclarationSyntax;
+            string newName = null;
+            if (isField)
+            {
+                newName = LookupGlobalMapping(originalName);
+                if (newName == null)
+                {
+                    newName = "V_" + GenerateRandomName();
+                    AddGlobalMapping(originalName, "V");
+                    newName = LookupGlobalMapping(originalName);
+                }
+            }
+            else
+            {
+                newName = LookupLocalMapping(originalName);
+                if (newName == null)
+                {
+                    newName = "V_" + GenerateRandomName();
+                    AddLocalMapping(originalName, newName);
+                }
+            }
+            var visited = (VariableDeclaratorSyntax)base.VisitVariableDeclarator(node);
+            visited = visited.WithIdentifier(SyntaxFactory.Identifier(newName));
+            return visited;
+        }
+
+        // IdentifierName: kolla först i lokala scopes, annars i global mapping
+        public override SyntaxNode VisitIdentifierName(IdentifierNameSyntax node)
+        {
+            string original = node.Identifier.Text;
+            string newName = LookupLocalMapping(original) ?? LookupGlobalMapping(original);
+            if (newName != null)
+            {
+                node = node.WithIdentifier(SyntaxFactory.Identifier(newName));
+            }
+            return base.VisitIdentifierName(node);
+        }
+
+        // Vid metodanrop kontrolleras även lokala mappings
+        public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
+        {
+            if (node.Expression is IdentifierNameSyntax identifier)
+            {
+                string originalName = identifier.Identifier.Text;
+                // Om namnet redan är obfuskerat, hoppa över
+                if (originalName.StartsWith("M_") || originalName.StartsWith("P_")
+                    || originalName.StartsWith("V_") || originalName.StartsWith("C_"))
+                {
+                    return base.VisitInvocationExpression(node);
+                }
+                string newName = LookupLocalMapping(originalName) ?? LookupGlobalMapping(originalName);
+                if (newName != null)
+                {
+                    log($"[VisitInvocationExpression] Replacing invocation '{originalName}' -> '{newName}'", "info");
+                    node = node.WithExpression(SyntaxFactory.IdentifierName(newName));
+                }
+            }
+            return base.VisitInvocationExpression(node);
+        }
+
+        #endregion
+
+        #region Övriga överskrivningar (global mapping)
 
         public override SyntaxNode VisitLiteralExpression(LiteralExpressionSyntax node)
         {
@@ -222,15 +377,12 @@ namespace MultiObfuscator
                     return node;
                 }
                 string originalString = node.Token.ValueText;
-
-                // If string splitting is disabled, simply encrypt the whole string.
                 if (!settings.EnableStringSplitting || originalString.Length <= 4)
                 {
                     string encryptedString = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(originalString));
-                    log($"[VisitLiteralExpression] Encrypting '{originalString}' -> M_xxxxx(\"{encryptedString}\")", "info");
-
+                    log($"[VisitLiteralExpression] Encrypting '{originalString}' -> {decryptStringMethodName}(\"{encryptedString}\")", "info");
                     return SyntaxFactory.InvocationExpression(
-                        SyntaxFactory.IdentifierName("M_xxxxx"),
+                        SyntaxFactory.IdentifierName(decryptStringMethodName),
                         SyntaxFactory.ArgumentList(
                             SyntaxFactory.SingletonSeparatedList(
                                 SyntaxFactory.Argument(
@@ -243,7 +395,7 @@ namespace MultiObfuscator
                         )
                     );
                 }
-                else // If enabled, split the string.
+                else
                 {
                     log($"[VisitLiteralExpression] Splitting and encrypting '{originalString}'", "info");
                     int maxPieces = Math.Min(5, originalString.Length);
@@ -268,7 +420,7 @@ namespace MultiObfuscator
                     {
                         string encodedPiece = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(piece));
                         var decryptCall = SyntaxFactory.InvocationExpression(
-                            SyntaxFactory.IdentifierName("M_xxxxx"),
+                            SyntaxFactory.IdentifierName(decryptStringMethodName),
                             SyntaxFactory.ArgumentList(
                                 SyntaxFactory.SingletonSeparatedList(
                                     SyntaxFactory.Argument(
@@ -298,68 +450,11 @@ namespace MultiObfuscator
             return base.VisitLiteralExpression(node);
         }
 
-        public override SyntaxNode VisitVariableDeclarator(VariableDeclaratorSyntax node)
-        {
-            var originalName = node.Identifier.Text;
-            AddNameMap(originalName, "V");
-
-            var visited = (VariableDeclaratorSyntax)base.VisitVariableDeclarator(node);
-            var newVarName = LookupName(originalName);
-
-            if (newVarName != null)
-            {
-                log($"[VisitVariableDeclarator] Renaming variable '{originalName}' -> '{newVarName}'", "debug");
-                visited = visited.WithIdentifier(SyntaxFactory.Identifier(newVarName));
-            }
-
-            return visited;
-        }
-
-        public override SyntaxNode VisitParameter(ParameterSyntax node)
-        {
-            var originalName = node.Identifier.Text;
-            log($"[VisitParameter] param '{originalName}' ...", "info");
-
-            var newName = LookupName(originalName);
-            if (newName != null)
-            {
-                node = node.WithIdentifier(SyntaxFactory.Identifier(newName));
-            }
-
-            return base.VisitParameter(node);
-        }
-
-        public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
-        {
-            if (node.Expression is IdentifierNameSyntax identifier)
-            {
-                string originalName = identifier.Identifier.Text;
-
-                // Skip lookup for already-obfuscated names.
-                if (originalName.StartsWith("M_") || originalName.StartsWith("P_")
-                    || originalName.StartsWith("V_") || originalName.StartsWith("C_"))
-                {
-                    return base.VisitInvocationExpression(node);
-                }
-
-                string newName = LookupName(originalName);
-                if (newName != null)
-                {
-                    log($"[VisitInvocationExpression] Replacing invocation '{originalName}' -> '{newName}'", "info");
-                    node = node.WithExpression(SyntaxFactory.IdentifierName(newName));
-                }
-            }
-
-            return base.VisitInvocationExpression(node);
-        }
-
         public override SyntaxNode VisitClassDeclaration(ClassDeclarationSyntax node)
         {
-            var originalClassName = node.Identifier.Text;
+            string originalClassName = node.Identifier.Text;
             if (IsSystemType(originalClassName)) return base.VisitClassDeclaration(node);
-
-            AddNameMap(originalClassName, "C");
-
+            AddGlobalMapping(originalClassName, "C");
             foreach (var member in node.Members)
             {
                 if (member is MethodDeclarationSyntax method)
@@ -367,81 +462,366 @@ namespace MultiObfuscator
                     ProcessMethod(method);
                 }
             }
-
-            // Process the class normally.
             var visitedClass = (ClassDeclarationSyntax)base.VisitClassDeclaration(node);
             visitedClass = visitedClass.WithIdentifier(GetRenamedIdentifier(originalClassName));
-
             if (!decryptStringInjected)
             {
-                log("[VisitClassDeclaration] Injecting DecryptString method (M_xxxxx).", "info");
+                log($"[VisitClassDeclaration] Injecting DecryptString method ({decryptStringMethodName}).", "info");
                 visitedClass = visitedClass.AddMembers(CreateDecryptMethod());
                 decryptStringInjected = true;
             }
-
-            // === NEW: Inject a static field for V_xxxxx ===
-            // This ensures that any references (e.g. in dead code) to "V_xxxxx" are valid.
-            // Generate a random string value for the field.
-            string randomString = GenerateRandomName();
-
-            bool hasV_xxxxxDeclaration = visitedClass.Members
-                .OfType<FieldDeclarationSyntax>()
-                .Any(f => f.Declaration.Variables.Any(v => v.Identifier.Text == "V_" + randomString));
-            // === End of NEW code ===
-
             return visitedClass;
         }
 
-        public override SyntaxNode VisitBlock(BlockSyntax node)
+        // Vi fortsätter att använda din kontrollflödesomvandling i metoder
+        public override SyntaxNode VisitMethodDeclaration(MethodDeclarationSyntax node)
         {
-            var visitedBlock = (BlockSyntax)base.VisitBlock(node);
-            var statements = visitedBlock.Statements.ToList();
-
-            if (statements.Count > 0 && random.NextDouble() < settings.DeadCodeProbability)
+            // Remove the check for "Main" so that even Main is transformed
+            if (node.ExplicitInterfaceSpecifier != null ||
+                node.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword)) ||
+                node.Body == null ||
+                !settings.EnableControlFlowFlattening)
             {
-                var returnIndices = statements
-                    .Select((stmt, index) => new { stmt, index })
-                    .Where(x => x.stmt is ReturnStatementSyntax)
-                    .Select(x => x.index)
-                    .ToList();
+                return base.VisitMethodDeclaration(node);
+            }
+            // Create a local scope for the method’s body.
+            PushLocalScope();
+            MethodDeclarationSyntax transformedNode = (MethodDeclarationSyntax)base.VisitMethodDeclaration(node);
+            bool isNonVoid = true;
+            if (transformedNode.ReturnType is PredefinedTypeSyntax pts &&
+                pts.Keyword.IsKind(SyntaxKind.VoidKeyword))
+            {
+                isNonVoid = false;
+            }
+            // Create two state variables (names are randomly generated for the state and result)
+            string stateVarName = "V_" + GenerateRandomName();
+            string resultVarName = "V_" + GenerateRandomName();
+            AddLocalMapping(stateVarName, stateVarName);
+            AddLocalMapping(resultVarName, resultVarName);
+            List<StatementSyntax> newStatements = new List<StatementSyntax>();
 
-                int insertionIndex;
-                if (returnIndices.Any())
+            // 1. Declare the state variable (the “switch selector”)
+            var stateDeclaration = SyntaxFactory.LocalDeclarationStatement(
+                SyntaxFactory.VariableDeclaration(
+                    SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.IntKeyword)))
+                .WithVariables(
+                    SyntaxFactory.SingletonSeparatedList(
+                        SyntaxFactory.VariableDeclarator(SyntaxFactory.Identifier(stateVarName))
+                        .WithInitializer(
+                            SyntaxFactory.EqualsValueClause(
+                                SyntaxFactory.LiteralExpression(
+                                    SyntaxKind.NumericLiteralExpression,
+                                    SyntaxFactory.Literal(0)
+                                )
+                            )
+                        )
+                    )
+                )
+            );
+            newStatements.Add(stateDeclaration);
+
+            // 2. For non-void methods, declare a result variable.
+            if (isNonVoid)
+            {
+                var resultDeclaration = SyntaxFactory.LocalDeclarationStatement(
+                    SyntaxFactory.VariableDeclaration(transformedNode.ReturnType)
+                    .WithVariables(
+                        SyntaxFactory.SingletonSeparatedList(
+                            SyntaxFactory.VariableDeclarator(SyntaxFactory.Identifier(resultVarName))
+                            .WithInitializer(
+                                SyntaxFactory.EqualsValueClause(
+                                    SyntaxFactory.DefaultExpression(transformedNode.ReturnType)
+                                )
+                            )
+                        )
+                    )
+                );
+                newStatements.Add(resultDeclaration);
+            }
+
+            // 3. Transform each original statement into a switch section.
+            var originalStatements = transformedNode.Body.Statements;
+            List<SwitchSectionSyntax> switchSections = new List<SwitchSectionSyntax>();
+            int caseIndex = 0;
+            foreach (var stmt in originalStatements)
+            {
+                var caseLabel = SyntaxFactory.CaseSwitchLabel(
+                    SyntaxFactory.LiteralExpression(
+                        SyntaxKind.NumericLiteralExpression,
+                        SyntaxFactory.Literal(caseIndex)
+                    )
+                );
+                List<StatementSyntax> caseStatements = new List<StatementSyntax>();
+                if (stmt is ReturnStatementSyntax returnStmt)
                 {
-                    insertionIndex = random.Next(0, returnIndices.Min());
+                    if (isNonVoid)
+                    {
+                        var assignResult = SyntaxFactory.ExpressionStatement(
+                            SyntaxFactory.AssignmentExpression(
+                                SyntaxKind.SimpleAssignmentExpression,
+                                SyntaxFactory.IdentifierName(resultVarName),
+                                returnStmt.Expression ?? SyntaxFactory.DefaultExpression(transformedNode.ReturnType)
+                            )
+                        );
+                        caseStatements.Add(assignResult);
+                    }
+                    else
+                    {
+                        caseStatements.Add(stmt);
+                    }
+                    var setTerminate = SyntaxFactory.ExpressionStatement(
+                        SyntaxFactory.AssignmentExpression(
+                            SyntaxKind.SimpleAssignmentExpression,
+                            SyntaxFactory.IdentifierName(stateVarName),
+                            SyntaxFactory.PrefixUnaryExpression(
+                                SyntaxKind.UnaryMinusExpression,
+                                SyntaxFactory.LiteralExpression(
+                                    SyntaxKind.NumericLiteralExpression,
+                                    SyntaxFactory.Literal(1)
+                                )
+                            )
+                        )
+                    );
+                    caseStatements.Add(setTerminate);
                 }
                 else
                 {
-                    insertionIndex = random.Next(0, statements.Count + 1);
+                    caseStatements.Add(stmt);
+                    var setNext = SyntaxFactory.ExpressionStatement(
+                        SyntaxFactory.AssignmentExpression(
+                            SyntaxKind.SimpleAssignmentExpression,
+                            SyntaxFactory.IdentifierName(stateVarName),
+                            SyntaxFactory.LiteralExpression(
+                                SyntaxKind.NumericLiteralExpression,
+                                SyntaxFactory.Literal(caseIndex + 1)
+                            )
+                        )
+                    );
+                    caseStatements.Add(setNext);
                 }
-                statements.Insert(insertionIndex, GenerateDeadCodeBlock());
+                caseStatements.Add(SyntaxFactory.BreakStatement());
+                var switchSection = SyntaxFactory.SwitchSection(
+                    SyntaxFactory.List<SwitchLabelSyntax>(new[] { caseLabel }),
+                    SyntaxFactory.List(caseStatements)
+                );
+                switchSections.Add(switchSection);
+                caseIndex++;
             }
 
-            return visitedBlock.WithStatements(SyntaxFactory.List(statements));
-        }
+            // 4. Create a default switch section.
+            var defaultSection = SyntaxFactory.SwitchSection(
+                SyntaxFactory.List<SwitchLabelSyntax>(new[] { SyntaxFactory.DefaultSwitchLabel() }),
+                SyntaxFactory.List(new StatementSyntax[] { SyntaxFactory.BreakStatement() })
+            );
+            switchSections.Add(defaultSection);
 
-        private void ProcessMethod(MethodDeclarationSyntax method)
-        {
-            if (method.ExplicitInterfaceSpecifier != null ||
-                method.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword)))
+            // 5. Build the switch statement that “drives” the flattened control flow.
+            var switchStatement = SyntaxFactory.SwitchStatement(
+                SyntaxFactory.IdentifierName(stateVarName),
+                SyntaxFactory.List(switchSections)
+            );
+
+            // 6. Create a while–loop that repeatedly executes the switch.
+            var whileLoop = SyntaxFactory.WhileStatement(
+                SyntaxFactory.BinaryExpression(
+                    SyntaxKind.NotEqualsExpression,
+                    SyntaxFactory.IdentifierName(stateVarName),
+                    SyntaxFactory.LiteralExpression(
+                        SyntaxKind.NumericLiteralExpression,
+                        SyntaxFactory.Literal(-1)
+                    )
+                ),
+                SyntaxFactory.Block(switchStatement)
+            );
+            newStatements.Add(whileLoop);
+
+            // 7. For non-void methods, add a return statement.
+            if (isNonVoid)
             {
-                log($"[SkipMethod] Preserving {method.Identifier.Text}", "info");
-                return;
+                newStatements.Add(SyntaxFactory.ReturnStatement(SyntaxFactory.IdentifierName(resultVarName)));
             }
+            var newBody = SyntaxFactory.Block(newStatements);
 
-            var methodName = method.Identifier.Text;
-            if (methodName == "Main" && IsMainMethod(method)) return;
+            // **** NEW CODE: Inject missing variable declarations for V_QGoioV and V_ORjvqQ ****
+            // If the new body’s text contains these identifiers but no local declaration,
+            // then insert declarations at the very beginning.
+            var bodyText = newBody.ToFullString();
+            List<StatementSyntax> injections = new List<StatementSyntax>();
+            if (bodyText.Contains("V_QGoioV") && !bodyText.Contains("int V_QGoioV"))
+            {
+                injections.Add(SyntaxFactory.ParseStatement("int V_QGoioV = 0;"));
+            }
+            if (bodyText.Contains("V_ORjvqQ") && !bodyText.Contains("int V_ORjvqQ"))
+            {
+                injections.Add(SyntaxFactory.ParseStatement("int V_ORjvqQ = 0;"));
+            }
+            if (injections.Any())
+            {
+                newBody = newBody.WithStatements(newBody.Statements.InsertRange(0, injections));
+            }
+            // **** End of injection ****
 
-            AddNameMap(methodName, "M");
-            ProcessParameters(method.ParameterList);
-            ProcessVariables(method.Body);
+            transformedNode = transformedNode.WithBody(newBody);
+            transformedNode = transformedNode.WithIdentifier(GetRenamedIdentifier(transformedNode.Identifier.Text));
+            PopLocalScope();
+            return transformedNode;
         }
 
-        private bool IsMainMethod(MethodDeclarationSyntax method)
+        public override SyntaxNode VisitInterpolation(InterpolationSyntax node)
         {
-            return method.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)) &&
-                   method.ReturnType is PredefinedTypeSyntax returnType &&
-                   returnType.Keyword.IsKind(SyntaxKind.VoidKeyword);
+            var visited = (InterpolationSyntax)base.VisitInterpolation(node);
+            return visited.WithExpression((ExpressionSyntax)Visit(visited.Expression));
+        }
+
+        public override SyntaxNode VisitGenericName(GenericNameSyntax node)
+        {
+            string original = node.Identifier.Text;
+            string newName = LookupLocalMapping(original) ?? LookupGlobalMapping(original);
+            return newName != null ? node.WithIdentifier(SyntaxFactory.Identifier(newName)) : node;
+        }
+
+        #endregion
+
+        #region Övrigt
+
+        public override SyntaxNode VisitSwitchStatement(SwitchStatementSyntax node)
+        {
+            log($"[VisitSwitchStatement] Obfuscating switch statement.", "info");
+            // Exempel på omvandling av switch till en while-loop med slumpade case-värden
+
+            string switchVarName = GenerateRandomName(); // initial state-variabel
+            AddGlobalMapping(switchVarName, "V"); // hantera globalt
+            string stateVarName = GenerateRandomName();
+            AddLocalMapping(stateVarName, stateVarName); // behandla state-variabeln som lokal
+
+            var switchCases = node.Sections
+                .Select((section, index) => new { Case = section, Index = index })
+                .OrderBy(x => random.Next())
+                .ToList();
+            var caseMappings = switchCases.ToDictionary(x => x.Index, x => random.Next(1000, 9999));
+
+            var caseStatements = new List<StatementSyntax>();
+
+            // Deklarera state-variabeln
+            var stateDeclaration = SyntaxFactory.LocalDeclarationStatement(
+                SyntaxFactory.VariableDeclaration(SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.IntKeyword)))
+                .WithVariables(
+                    SyntaxFactory.SingletonSeparatedList(
+                        SyntaxFactory.VariableDeclarator(SyntaxFactory.Identifier(LookupLocalMapping(stateVarName) ?? stateVarName))
+                        .WithInitializer(
+                            SyntaxFactory.EqualsValueClause(SyntaxFactory.IdentifierName(LookupGlobalMapping(switchVarName) ?? switchVarName))
+                        )
+                    )
+                )
+            );
+            caseStatements.Add(stateDeclaration);
+
+            var switchSections = switchCases.Select(x =>
+            {
+                var caseLabel = SyntaxFactory.CaseSwitchLabel(
+                    SyntaxFactory.LiteralExpression(
+                        SyntaxKind.NumericLiteralExpression,
+                        SyntaxFactory.Literal(caseMappings[x.Index])
+                    )
+                );
+                var statements = x.Case.Statements
+                    .Select(stmt => (StatementSyntax)Visit(stmt))
+                    .ToList();
+                if (statements.Count > 0)
+                {
+                    statements.Add(
+                        SyntaxFactory.ExpressionStatement(
+                            SyntaxFactory.AssignmentExpression(
+                                SyntaxKind.SimpleAssignmentExpression,
+                                SyntaxFactory.IdentifierName(LookupLocalMapping(stateVarName) ?? stateVarName),
+                                SyntaxFactory.LiteralExpression(
+                                    SyntaxKind.NumericLiteralExpression,
+                                    SyntaxFactory.Literal(caseMappings.ContainsKey(x.Index + 1) ? caseMappings[x.Index + 1] : -1)
+                                )
+                            )
+                        )
+                    );
+                }
+                statements.Add(SyntaxFactory.BreakStatement());
+                return SyntaxFactory.SwitchSection(
+                    SyntaxFactory.List<SwitchLabelSyntax>(new[] { caseLabel }),
+                    SyntaxFactory.List(statements)
+                );
+            }).ToList();
+
+            var defaultSection = SyntaxFactory.SwitchSection(
+                SyntaxFactory.List<SwitchLabelSyntax>(new[] { SyntaxFactory.DefaultSwitchLabel() }),
+                SyntaxFactory.List(new StatementSyntax[] { SyntaxFactory.BreakStatement() })
+            );
+            switchSections.Add(defaultSection);
+
+            var obfuscatedSwitch = SyntaxFactory.SwitchStatement(
+                SyntaxFactory.IdentifierName(LookupLocalMapping(stateVarName) ?? stateVarName),
+                SyntaxFactory.List(switchSections)
+            );
+            var whileLoop = SyntaxFactory.WhileStatement(
+                SyntaxFactory.BinaryExpression(
+                    SyntaxKind.NotEqualsExpression,
+                    SyntaxFactory.IdentifierName(LookupLocalMapping(stateVarName) ?? stateVarName),
+                    SyntaxFactory.LiteralExpression(
+                        SyntaxKind.NumericLiteralExpression,
+                        SyntaxFactory.Literal(-1)
+                    )
+                ),
+                SyntaxFactory.Block(obfuscatedSwitch)
+            );
+            caseStatements.Add(whileLoop);
+            return SyntaxFactory.Block(caseStatements);
+        }
+
+        private bool IsSystemType(string identifier) =>
+            systemIdentifiers.Contains(identifier) ||
+            identifier.StartsWith("System.") ||
+            identifier.StartsWith("Microsoft.");
+
+        private MethodDeclarationSyntax CreateDecryptMethod() =>
+            SyntaxFactory.ParseMemberDeclaration($@"
+                private static string {decryptStringMethodName}(string {decryptStringVariableName})
+                {{
+                    if (string.IsNullOrEmpty({decryptStringVariableName})) return string.Empty;
+                    byte[] {decryptStringVariable2Name} = Convert.FromBase64String({decryptStringVariableName});
+                    return System.Text.Encoding.UTF8.GetString({decryptStringVariable2Name});
+                }}") as MethodDeclarationSyntax;
+
+        private SyntaxToken GetRenamedIdentifier(string originalName)
+        {
+            string newName = LookupGlobalMapping(originalName) ?? originalName;
+            return SyntaxFactory.Identifier(newName);
+        }
+
+        #endregion
+
+        private void AddNameMap(string originalName, string prefix)
+        {
+            if (!nameMap.ContainsKey(originalName))
+            {
+                string newName = prefix + "_" + GenerateRandomName();
+                nameMap[originalName] = newName;
+                log($"[AddNameMap] '{originalName}' -> '{newName}'", "success");
+            }
+            else
+            {
+                log($"[AddNameMap] already exists: '{originalName}' -> '{nameMap[originalName]}'", "info");
+            }
+        }
+
+        private string LookupName(string originalName)
+        {
+            if (nameMap.TryGetValue(originalName, out var newName))
+            {
+                log($"[LookupName] Found mapping for '{originalName}' -> '{newName}'", "debug");
+                return newName;
+            }
+            else
+            {
+                log($"[LookupName] WARNING: No mapping found for '{originalName}'", "warning");
+                return null;
+            }
         }
 
         private void ProcessParameters(ParameterListSyntax parameterList)
@@ -489,233 +869,5 @@ namespace MultiObfuscator
             return SyntaxFactory.IfStatement(condition, block);
         }
 
-        public override SyntaxNode VisitMethodDeclaration(MethodDeclarationSyntax node)
-        {
-            // If the method is public, has an interface specifier, has no body,
-            // or is Main (if you wish to leave Main untouched), or if flattening is disabled:
-            if (node.ExplicitInterfaceSpecifier != null ||
-                node.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword)) ||
-                node.Body == null ||
-                (node.Identifier.Text == "Main" && IsMainMethod(node)) ||
-                !settings.EnableControlFlowFlattening)
-            {
-                return base.VisitMethodDeclaration(node);
-            }
-
-            // Otherwise, perform the control�flow flattening transformation.
-            // (The transformation code remains essentially the same as before.)
-            MethodDeclarationSyntax transformedNode = (MethodDeclarationSyntax)base.VisitMethodDeclaration(node);
-
-            bool isNonVoid = true;
-            if (transformedNode.ReturnType is PredefinedTypeSyntax pts &&
-                pts.Keyword.IsKind(SyntaxKind.VoidKeyword))
-            {
-                isNonVoid = false;
-            }
-
-            string stateVarName = "V_" + GenerateRandomName();
-            string resultVarName = "V_" + GenerateRandomName();
-
-            List<StatementSyntax> newStatements = new List<StatementSyntax>();
-
-            // 1. Insert state variable declaration.
-            var stateDeclaration = SyntaxFactory.LocalDeclarationStatement(
-                SyntaxFactory.VariableDeclaration(
-                    SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.IntKeyword)))
-                .WithVariables(
-                    SyntaxFactory.SingletonSeparatedList(
-                        SyntaxFactory.VariableDeclarator(SyntaxFactory.Identifier(stateVarName))
-                        .WithInitializer(
-                            SyntaxFactory.EqualsValueClause(
-                                SyntaxFactory.LiteralExpression(
-                                    SyntaxKind.NumericLiteralExpression,
-                                    SyntaxFactory.Literal(0)
-                                )
-                            )
-                        )
-                    )
-                )
-            );
-            newStatements.Add(stateDeclaration);
-
-            // 2. For non�void methods, declare a result variable.
-            if (isNonVoid)
-            {
-                var resultDeclaration = SyntaxFactory.LocalDeclarationStatement(
-                    SyntaxFactory.VariableDeclaration(transformedNode.ReturnType)
-                    .WithVariables(
-                        SyntaxFactory.SingletonSeparatedList(
-                            SyntaxFactory.VariableDeclarator(SyntaxFactory.Identifier(resultVarName))
-                            .WithInitializer(
-                                SyntaxFactory.EqualsValueClause(
-                                    SyntaxFactory.DefaultExpression(transformedNode.ReturnType)
-                                )
-                            )
-                        )
-                    )
-                );
-                newStatements.Add(resultDeclaration);
-            }
-
-            // 3. Process each original statement into a switch section.
-            var originalStatements = transformedNode.Body.Statements;
-            List<SwitchSectionSyntax> switchSections = new List<SwitchSectionSyntax>();
-            int caseIndex = 0;
-            foreach (var stmt in originalStatements)
-            {
-                var caseLabel = SyntaxFactory.CaseSwitchLabel(
-                    SyntaxFactory.LiteralExpression(
-                        SyntaxKind.NumericLiteralExpression,
-                        SyntaxFactory.Literal(caseIndex)
-                    )
-                );
-
-                List<StatementSyntax> caseStatements = new List<StatementSyntax>();
-
-                if (stmt is ReturnStatementSyntax returnStmt)
-                {
-                    if (isNonVoid)
-                    {
-                        var assignResult = SyntaxFactory.ExpressionStatement(
-                            SyntaxFactory.AssignmentExpression(
-                                SyntaxKind.SimpleAssignmentExpression,
-                                SyntaxFactory.IdentifierName(resultVarName),
-                                returnStmt.Expression ?? SyntaxFactory.DefaultExpression(transformedNode.ReturnType)
-                            )
-                        );
-                        caseStatements.Add(assignResult);
-                    }
-                    else
-                    {
-                        caseStatements.Add(stmt);
-                    }
-
-                    var setTerminate = SyntaxFactory.ExpressionStatement(
-                        SyntaxFactory.AssignmentExpression(
-                            SyntaxKind.SimpleAssignmentExpression,
-                            SyntaxFactory.IdentifierName(stateVarName),
-                            SyntaxFactory.PrefixUnaryExpression(
-                                SyntaxKind.UnaryMinusExpression,
-                                SyntaxFactory.LiteralExpression(
-                                    SyntaxKind.NumericLiteralExpression,
-                                    SyntaxFactory.Literal(1)
-                                )
-                            )
-                        )
-                    );
-                    caseStatements.Add(setTerminate);
-                }
-                else
-                {
-                    caseStatements.Add(stmt);
-                    var setNext = SyntaxFactory.ExpressionStatement(
-                        SyntaxFactory.AssignmentExpression(
-                            SyntaxKind.SimpleAssignmentExpression,
-                            SyntaxFactory.IdentifierName(stateVarName),
-                            SyntaxFactory.LiteralExpression(
-                                SyntaxKind.NumericLiteralExpression,
-                                SyntaxFactory.Literal(caseIndex + 1)
-                            )
-                        )
-                    );
-                    caseStatements.Add(setNext);
-                }
-
-                caseStatements.Add(SyntaxFactory.BreakStatement());
-                var switchSection = SyntaxFactory.SwitchSection(
-                    SyntaxFactory.List<SwitchLabelSyntax>(new[] { caseLabel }),
-                    SyntaxFactory.List(caseStatements)
-                );
-                switchSections.Add(switchSection);
-                caseIndex++;
-            }
-
-            // 4. Create a default switch section.
-            var defaultSection = SyntaxFactory.SwitchSection(
-                SyntaxFactory.List<SwitchLabelSyntax>(new[] { SyntaxFactory.DefaultSwitchLabel() }),
-                SyntaxFactory.List(new StatementSyntax[] { SyntaxFactory.BreakStatement() })
-            );
-            switchSections.Add(defaultSection);
-
-            // 5. Build the switch statement.
-            var switchStatement = SyntaxFactory.SwitchStatement(
-                SyntaxFactory.IdentifierName(stateVarName),
-                SyntaxFactory.List(switchSections)
-            );
-
-            // 6. Build a while loop that runs until state equals -1.
-            var whileLoop = SyntaxFactory.WhileStatement(
-                SyntaxFactory.BinaryExpression(
-                    SyntaxKind.NotEqualsExpression,
-                    SyntaxFactory.IdentifierName(stateVarName),
-                    SyntaxFactory.LiteralExpression(
-                        SyntaxKind.NumericLiteralExpression,
-                        SyntaxFactory.Literal(-1)
-                    )
-                ),
-                SyntaxFactory.Block(switchStatement)
-            );
-            newStatements.Add(whileLoop);
-
-            // 7. For non�void methods, add a final return.
-            if (isNonVoid)
-            {
-                newStatements.Add(SyntaxFactory.ReturnStatement(SyntaxFactory.IdentifierName(resultVarName)));
-            }
-
-            var newBody = SyntaxFactory.Block(newStatements);
-            var newMethod = transformedNode.WithBody(newBody);
-            newMethod = newMethod.WithIdentifier(GetRenamedIdentifier(transformedNode.Identifier.Text));
-            transformedNode = (MethodDeclarationSyntax)newMethod.NormalizeWhitespace();
-            return transformedNode;
-        }
-
-        public override SyntaxNode VisitIdentifierName(IdentifierNameSyntax node)
-        {
-            var original = node.Identifier.Text;
-            var newName = LookupName(original);
-
-            log($"[VisitIdentifierName] '{original}' -> '{newName}'", "info");
-
-            return newName != null
-                ? node.WithIdentifier(SyntaxFactory.Identifier(newName))
-                : node;
-        }
-
-        public override SyntaxNode VisitInterpolation(InterpolationSyntax node)
-        {
-            var visited = (InterpolationSyntax)base.VisitInterpolation(node);
-            return visited.WithExpression((ExpressionSyntax)Visit(visited.Expression));
-        }
-
-        public override SyntaxNode VisitGenericName(GenericNameSyntax node)
-        {
-            var original = node.Identifier.Text;
-            var newName = LookupName(original);
-
-            return newName != null
-                ? node.WithIdentifier(SyntaxFactory.Identifier(newName))
-                : node;
-        }
-
-        private bool IsSystemType(string identifier) =>
-            systemIdentifiers.Contains(identifier) ||
-            identifier.StartsWith("System.") ||
-            identifier.StartsWith("Microsoft.");
-
-        private MethodDeclarationSyntax CreateDecryptMethod() =>
-            SyntaxFactory.ParseMemberDeclaration(@"
-                private static string M_xxxxx(string V_xxxxx)
-                {
-                    if (string.IsNullOrEmpty(V_xxxxx)) return string.Empty;
-                    byte[] V_xxxx = Convert.FromBase64String(V_xxxxx);
-                    return System.Text.Encoding.UTF8.GetString(V_xxxx);
-                }") as MethodDeclarationSyntax;
-
-        private SyntaxToken GetRenamedIdentifier(string originalName)
-        {
-            var newName = LookupName(originalName);
-            return SyntaxFactory.Identifier(newName ?? originalName);
-        }
     }
 }
