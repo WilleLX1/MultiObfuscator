@@ -1,8 +1,10 @@
 # MultiObfuscator
 
+![MultiObfuscator Icon](project-icon.png)
+
 A Windows Forms-based C# code obfuscator built with Roslyn (Microsoft.CodeAnalysis) to protect your source code by renaming identifiers, encrypting string literals, and providing step-by-step obfuscation insights.
 
-![Demo Screenshot](screenshot.png) <!-- Replace with actual screenshot path if available -->
+![Demo Screenshot](screenshot.png)
 
 ## Features
 
