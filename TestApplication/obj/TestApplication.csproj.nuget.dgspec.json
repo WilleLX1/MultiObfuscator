@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\projects\\C#\\MultiObfuscator\\TestApplication\\TestApplication.csproj": {}
+    "C:\\projects\\Csharp\\MultiObfuscator\\TestApplication\\TestApplication.csproj": {}
   },
   "projects": {
-    "C:\\projects\\C#\\MultiObfuscator\\TestApplication\\TestApplication.csproj": {
+    "C:\\projects\\Csharp\\MultiObfuscator\\TestApplication\\TestApplication.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\projects\\C#\\MultiObfuscator\\TestApplication\\TestApplication.csproj",
+        "projectUniqueName": "C:\\projects\\Csharp\\MultiObfuscator\\TestApplication\\TestApplication.csproj",
         "projectName": "TestApplication",
-        "projectPath": "C:\\projects\\C#\\MultiObfuscator\\TestApplication\\TestApplication.csproj",
+        "projectPath": "C:\\projects\\Csharp\\MultiObfuscator\\TestApplication\\TestApplication.csproj",
         "packagesPath": "C:\\Users\\wdani\\.nuget\\packages\\",
-        "outputPath": "C:\\projects\\C#\\MultiObfuscator\\TestApplication\\obj\\",
+        "outputPath": "C:\\projects\\Csharp\\MultiObfuscator\\TestApplication\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

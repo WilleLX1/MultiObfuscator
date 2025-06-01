@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "C:\\projects\\C#\\MultiObfuscator\\MultiObfuscator\\MultiObfuscator.csproj": {}
+    "C:\\projects\\Csharp\\MultiObfuscator\\MultiObfuscator\\MultiObfuscator.csproj": {}
   },
   "projects": {
-    "C:\\projects\\C#\\MultiObfuscator\\MultiObfuscator\\MultiObfuscator.csproj": {
+    "C:\\projects\\Csharp\\MultiObfuscator\\MultiObfuscator\\MultiObfuscator.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\projects\\C#\\MultiObfuscator\\MultiObfuscator\\MultiObfuscator.csproj",
+        "projectUniqueName": "C:\\projects\\Csharp\\MultiObfuscator\\MultiObfuscator\\MultiObfuscator.csproj",
         "projectName": "MultiObfuscator",
-        "projectPath": "C:\\projects\\C#\\MultiObfuscator\\MultiObfuscator\\MultiObfuscator.csproj",
+        "projectPath": "C:\\projects\\Csharp\\MultiObfuscator\\MultiObfuscator\\MultiObfuscator.csproj",
         "packagesPath": "C:\\Users\\wdani\\.nuget\\packages\\",
-        "outputPath": "C:\\projects\\C#\\MultiObfuscator\\MultiObfuscator\\obj\\",
+        "outputPath": "C:\\projects\\Csharp\\MultiObfuscator\\MultiObfuscator\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

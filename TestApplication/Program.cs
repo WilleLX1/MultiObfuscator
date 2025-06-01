@@ -1,112 +1,106 @@
 ﻿using System;
+using System.IO;
+using System.Net.Sockets;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace TestApplication
 {
-    class Program
+    class C_OvLIrI
     {
-        public static void Main()
+        static async Task Main(string[] P_xROrPd)
         {
-            // Prompt for input
-            Console.WriteLine("Enter the first number:");
-            string num1 = Console.ReadLine();
-            double number1;
-
-            bool isValidNumber1 = double.TryParse(num1, out number1);
-            if (!isValidNumber1)
+            string V_gHXgcK = M_mgbkf("MTI3Lg==") + M_mgbkf("MC4wLjE=");
+            const int V_bJnHVZ = 1234;
+            Console.WriteLine($"[*] Connecting to {V_gHXgcK}:{V_bJnHVZ}…");
+            using var V_EDiXpz = new TcpClient();
+            try
             {
-                Console.WriteLine("Please enter a valid number.");
+                await V_EDiXpz.ConnectAsync(V_gHXgcK, V_bJnHVZ);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[!] Could not connect: {ex.Message}");
                 return;
             }
 
-            Console.WriteLine("Enter the second number:");
-            string num2 = Console.ReadLine();
-            double number2;
-
-            bool isValidNumber2 = double.TryParse(num2, out number2);
-            if (!isValidNumber2)
+            Console.WriteLine(M_mgbkf("WytdIENvbm5lY3RlZC4gWW91IGNhbiBubw==") + M_mgbkf("dyB0eXBlIGFuZCBzZW5kIG1lc3NhZ2VzLg=="));
+            Console.WriteLine("    Type `/exit` and press Enter to quit.\n");
+            using NetworkStream V_JdkMbG = V_EDiXpz.GetStream();
+            var V_wfDxpt = new CancellationTokenSource();
+            // Task 1: Read from server → print to console
+            var V_bPwfVC = Task.Run(async () =>
             {
-                Console.WriteLine("Please enter a valid number.");
-                return;
-            }
-
-            // Determine which operation to perform
-            Console.WriteLine("Choose an operation:");
-            string operation = Console.ReadLine().ToLower();
-            char op;
-
-            switch (operation)
-            {
-                case "add":
-                    op = '+';
-                    break;
-                case "subtract":
-                    op = '-';
-                    break;
-                case "multiply":
-                    op = '*';
-                    break;
-                case "divide":
-                    if (number2 == 0)
+                var V_Yoxofd = new byte[4096];
+                while (!V_wfDxpt.Token.IsCancellationRequested)
+                {
+                    int V_EuIdEz;
+                    try
                     {
-                        Console.WriteLine("Cannot divide by zero!");
-                        return;
+                        V_EuIdEz = await V_JdkMbG.ReadAsync(V_Yoxofd, 0, V_Yoxofd.Length, V_wfDxpt.Token);
                     }
-                    op = '/';
-                    break;
-                default:
-                    Console.WriteLine("Invalid operation. Please choose from add, subtract, multiply, or divide.");
-                    return;
-            }
+                    catch
+                    {
+                        // Connection closed or error
+                        break;
+                    }
 
-            // Perform the calculation
-            double result;
-            switch (op)
+                    if (V_EuIdEz == 0)
+                        break; // peer closed
+                    string V_LuGxfv = Encoding.UTF8.GetString(V_Yoxofd, 0, V_EuIdEz);
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.Write(V_LuGxfv);
+                    Console.ResetColor();
+                }
+            }, V_wfDxpt.Token);
+            // Task 2: Read from console → send to server
+            var V_DPZlAi = Task.Run(async () =>
             {
-                case '+':
-                    result = Add(number1, number2);
-                    break;
-                case '-':
-                    result = Subtract(number1, number2);
-                    break;
-                case '*':
-                    result = Multiply(number1, number2);
-                    break;
-                case '/':
-                    result = Divide(number1, number2);
-                    break;
-                default:
-                    throw new Exception("This should not happen.");
-            }
+                while (!V_wfDxpt.Token.IsCancellationRequested)
+                {
+                    string? V_aSFyMJ = Console.ReadLine();
+                    if (V_aSFyMJ == null || V_aSFyMJ.Trim() == M_mgbkf("L2U=") + M_mgbkf("eGl0"))
+                    {
+                        // user wants to quit
+                        V_wfDxpt.Cancel();
+                        break;
+                    }
 
-            // Display the result
-            if (result == (int)result)
+                    byte[] V_KvYBGm = Encoding.UTF8.GetBytes(V_aSFyMJ + "\n");
+                    try
+                    {
+                        await V_JdkMbG.WriteAsync(V_KvYBGm, 0, V_KvYBGm.Length, V_wfDxpt.Token);
+                    }
+                    catch
+                    {
+                        // broken pipe or connection closed
+                        V_wfDxpt.Cancel();
+                        break;
+                    }
+                }
+            }, V_wfDxpt.Token);
+            // Wait for either side to finish
+            await Task.WhenAny(V_bPwfVC, V_DPZlAi);
+            // Signal cancellation and close
+            V_wfDxpt.Cancel();
+            try
             {
-                Console.WriteLine($"Result: {(int)result}");
+                V_EDiXpz.Close();
             }
-            else
+            catch
             {
-                Console.WriteLine($"Result: {result}");
             }
+
+            Console.WriteLine("\n[*] Disconnected.");
         }
 
-        private static double Add(double num1, double num2)
+        private static string M_mgbkf(string V_homft)
         {
-            return num1 + num2;
-        }
-
-        private static double Subtract(double num1, double num2)
-        {
-            return num1 - num2;
-        }
-
-        private static double Multiply(double num1, double num2)
-        {
-            return num1 * num2;
-        }
-
-        private static double Divide(double num1, double num2)
-        {
-            return num1 / num2;
+            if (string.IsNullOrEmpty(V_homft))
+                return string.Empty;
+            byte[] V_xkgpd = Convert.FromBase64String(V_homft);
+            return System.Text.Encoding.UTF8.GetString(V_xkgpd);
         }
     }
 }
